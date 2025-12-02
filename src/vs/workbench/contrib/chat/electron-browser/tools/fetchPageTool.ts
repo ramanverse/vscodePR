@@ -295,7 +295,15 @@ export class FetchWebPageTool implements IToolImpl {
 			} else if (value.type === 'extracted') {
 				switch (value.value.status) {
 					case 'ok':
-						return { kind: 'text', value: value.value.result };
+						// Check if the extracted content is empty or whitespace-only
+						const content = value.value.result;
+						if (!content || content.trim().length === 0) {
+							return {
+								kind: 'text',
+								value: localize('fetchWebPage.emptyContent', 'No content could be extracted from this URL. The page may be empty, require JavaScript, or use a format that cannot be extracted.')
+							};
+						}
+						return { kind: 'text', value: content };
 					case 'redirect':
 						return { kind: 'text', value: `The webpage has redirected to "${value.value.toURI.toString(true)}". Use the ${InternalFetchWebPageToolId} again to get its contents.` };
 					case 'error':

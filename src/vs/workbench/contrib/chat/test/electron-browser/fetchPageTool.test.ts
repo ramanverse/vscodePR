@@ -929,4 +929,64 @@ suite('FetchWebPageTool', () => {
 			}
 		});
 	});
+
+	test('should return error message for empty or whitespace-only content', async () => {
+		const tool = new FetchWebPageTool(
+			new class extends TestWebContentExtractorService {
+				constructor() {
+					super(new ResourceMap<string>());
+				}
+				override async extract(uris: URI[]): Promise<WebContentExtractResult[]> {
+					return [
+						{ status: 'ok', result: '' }, // Empty string
+						{ status: 'ok', result: '   ' }, // Whitespace only
+						{ status: 'ok', result: '\n\t  \n' }, // Whitespace with newlines and tabs
+						{ status: 'ok', result: 'Valid content' } // Valid content for comparison
+					];
+				}
+			}(),
+			new ExtendedTestFileService(new ResourceMap<string | VSBuffer>()),
+			new MockTrustedDomainService(),
+			new MockChatService(),
+		);
+
+		const result = await tool.invoke(
+			{
+				callId: 'test-empty-content',
+				toolId: 'fetch-page',
+				parameters: { urls: ['https://empty.com', 'https://whitespace.com', 'https://tabs.com', 'https://valid.com'] },
+				context: undefined
+			},
+			() => Promise.resolve(0),
+			{ report: () => { } },
+			CancellationToken.None
+		);
+
+		// Should have 4 results
+		assert.strictEqual(result.content.length, 4, 'Should have 4 results');
+
+		// Empty string should return error message
+		assert.strictEqual(result.content[0].kind, 'text', 'Empty content should be text part');
+		if (result.content[0].kind === 'text') {
+			assert.ok(result.content[0].value.includes('No content could be extracted'), 'Empty content should have error message');
+		}
+
+		// Whitespace-only should return error message
+		assert.strictEqual(result.content[1].kind, 'text', 'Whitespace content should be text part');
+		if (result.content[1].kind === 'text') {
+			assert.ok(result.content[1].value.includes('No content could be extracted'), 'Whitespace content should have error message');
+		}
+
+		// Whitespace with newlines/tabs should return error message
+		assert.strictEqual(result.content[2].kind, 'text', 'Whitespace with newlines should be text part');
+		if (result.content[2].kind === 'text') {
+			assert.ok(result.content[2].value.includes('No content could be extracted'), 'Whitespace with newlines should have error message');
+		}
+
+		// Valid content should be returned as-is
+		assert.strictEqual(result.content[3].kind, 'text', 'Valid content should be text part');
+		if (result.content[3].kind === 'text') {
+			assert.strictEqual(result.content[3].value, 'Valid content', 'Valid content should be returned unchanged');
+		}
+	});
 });
